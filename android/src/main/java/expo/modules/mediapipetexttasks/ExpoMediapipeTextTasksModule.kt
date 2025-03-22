@@ -1,50 +1,98 @@
 package expo.modules.mediapipetexttasks
 
+import android.os.SystemClock
 import expo.modules.kotlin.modules.Module
 import expo.modules.kotlin.modules.ModuleDefinition
-import java.net.URL
+
+import android.util.Log
+import com.google.mediapipe.tasks.core.BaseOptions
+import com.google.mediapipe.tasks.core.Delegate
+import com.google.mediapipe.tasks.text.textembedder.TextEmbedder
+import com.google.mediapipe.tasks.text.textembedder.TextEmbedder.TextEmbedderOptions
+import com.google.mediapipe.tasks.text.textembedder.TextEmbedderResult
+import expo.modules.kotlin.Promise
+import expo.modules.kotlin.exception.CodedException
+
 
 class ExpoMediapipeTextTasksModule : Module() {
-  // Each module class must implement the definition function. The definition consists of components
-  // that describes the module's functionality and behavior.
-  // See https://docs.expo.dev/modules/module-api for more details about available components.
+  private val TAG = "ExpoMediapipeTextTasksModule"
+  private val DELEGATE_CPU = 0
+  private val DELEGATE_GPU = 1
+  private val context get() = requireNotNull(appContext.reactContext)
   override fun definition() = ModuleDefinition {
-    // Sets the name of the module that JavaScript code will use to refer to the module. Takes a string as an argument.
-    // Can be inferred from module's class name, but it's recommended to set it explicitly for clarity.
-    // The module will be accessible from `requireNativeModule('ExpoMediapipeTextTasks')` in JavaScript.
     Name("ExpoMediapipeTextTasks")
 
-    // Sets constant properties on the module. Can take a dictionary or a closure that returns a dictionary.
     Constants(
-      "PI" to Math.PI
+      "DELEGATE_CPU" to DELEGATE_CPU,
+      "DELEGATE_GPU" to DELEGATE_GPU,
     )
 
-    // Defines event names that the module can send to JavaScript.
-    Events("onChange")
-
-    // Defines a JavaScript synchronous function that runs the native code on the JavaScript thread.
-    Function("hello") {
-      "Hello world! 👋"
-    }
-
-    // Defines a JavaScript function that always returns a Promise and whose native code
-    // is by default dispatched on the different thread than the JavaScript runtime runs on.
-    AsyncFunction("setValueAsync") { value: String ->
-      // Send an event to JavaScript.
-      sendEvent("onChange", mapOf(
-        "value" to value
-      ))
-    }
-
-    // Enables the module to be used as a native view. Definition components that are accepted as part of
-    // the view definition: Prop, Events.
-    View(ExpoMediapipeTextTasksView::class) {
-      // Defines a setter for the `url` prop.
-      Prop("url") { view: ExpoMediapipeTextTasksView, url: URL ->
-        view.webView.loadUrl(url.toString())
+    fun setupTextEmbedder(currentDelegate: Int, modelPath: String): TextEmbedder? {
+      val baseOptionsBuilder = BaseOptions.builder()
+      when (currentDelegate) {
+        DELEGATE_CPU -> {
+          baseOptionsBuilder.setDelegate(Delegate.CPU)
+        }
+        DELEGATE_GPU -> {
+          baseOptionsBuilder.setDelegate(Delegate.GPU)
+        }
       }
-      // Defines an event that the view can send to JavaScript.
-      Events("onLoad")
+
+      // set the path to the model
+      baseOptionsBuilder.setModelAssetPath(modelPath)
+
+      try {
+        val baseOptions = baseOptionsBuilder.build()
+        val optionsBuilder =
+          TextEmbedderOptions.builder().setBaseOptions(baseOptions)
+        val options = optionsBuilder.build()
+
+        Log.d(TAG, "Text embedder options: $options")
+
+        val textEmbedder = TextEmbedder.createFromOptions(context, options)
+        return textEmbedder
+      } catch (e: IllegalStateException) {
+        Log.e(
+          TAG,
+          "Text embedder failed to load model with error: " + e.message
+        )
+      } catch (e: RuntimeException) {
+        Log.e(
+          TAG,
+          "Text embedder failed to load model with error: " + e.message
+        )
+      }
+      return null
+    }
+
+    fun formatOutput(result: TextEmbedderResult, inferenceTime: Long): Map<String, Any> {
+      return mapOf(
+        "string" to result.toString(),
+        "embeddings" to result.embeddingResult().embeddings().first().floatEmbedding(),
+        "inferenceTime" to inferenceTime.toDouble()
+      )
+    }
+
+    AsyncFunction("embed") { delegate: Int, modelPath: String, text: String, promise: Promise ->
+      if (delegate != 0 && delegate != 1) {
+        promise.reject(CodedException("Delegate must be 0 (CPU) or 1 (GPU)"))
+        return@AsyncFunction
+      }
+      Log.d(TAG, "embed: $modelPath, $text, $delegate")
+
+      val startTime = SystemClock.uptimeMillis()
+
+      val textEmbedder = setupTextEmbedder(delegate, modelPath)
+      Log.i(TAG, "Text embedder loaded successfully")
+
+      if (textEmbedder != null) {
+          val result = textEmbedder.embed(text)
+            val endTime = SystemClock.uptimeMillis()
+
+          promise.resolve(formatOutput(result, SystemClock.uptimeMillis() - startTime))
+      } else {
+          promise.reject(CodedException("Text embedder failed to load model"))
+      }
     }
   }
 }

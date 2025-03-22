@@ -1,73 +1,61 @@
-import { useEvent } from 'expo';
-import ExpoMediapipeTextTasks, { ExpoMediapipeTextTasksView } from 'expo-mediapipe-text-tasks';
-import { Button, SafeAreaView, ScrollView, Text, View } from 'react-native';
+import * as FileSystem from "expo-file-system";
+import * as TextTasks from "expo-mediapipe-text-tasks";
+import * as React from "react";
+import { Text, View, TextInput, ScrollView } from "react-native";
+
+const MODEL_URL =
+  "https://storage.googleapis.com/mediapipe-models/text_embedder/bert_embedder/float32/1/bert_embedder.tflite";
 
 export default function App() {
-  const onChangePayload = useEvent(ExpoMediapipeTextTasks, 'onChange');
+  const [embeddings, setEmbeddings] = React.useState<string>("");
+  const [text, setText] = React.useState<string>("Hello, world!");
+  React.useEffect(() => {
+    const a = async () => {
+      console.log("Downloading resources");
+      const modelFolderFilePath = FileSystem.cacheDirectory + "/models";
+
+      const exists = await FileSystem.getInfoAsync(modelFolderFilePath);
+      if (!exists.exists) {
+        await FileSystem.makeDirectoryAsync(modelFolderFilePath, {
+          intermediates: true,
+        });
+      }
+
+      const toFile = modelFolderFilePath + "/bert_embedder.tflite";
+
+      const fileExists = await FileSystem.getInfoAsync(toFile);
+      if (!fileExists.exists) {
+        console.log(`Downloading ${MODEL_URL} to ${toFile}`);
+        const downloadedFile = await FileSystem.downloadAsync(
+          MODEL_URL,
+          toFile,
+        );
+        console.log("Downloaded", downloadedFile);
+      }
+
+      const res = await TextTasks.embed(
+        TextTasks.DELEGATE_GPU,
+        // remove file:// prefix
+        toFile.replace("file://", ""),
+        text,
+      );
+      console.log({ timestamp: res.inferenceTime, embeddings: res.embeddings });
+      setEmbeddings(res.string);
+    };
+    a();
+  }, [text]);
 
   return (
-    <SafeAreaView style={styles.container}>
-      <ScrollView style={styles.container}>
-        <Text style={styles.header}>Module API Example</Text>
-        <Group name="Constants">
-          <Text>{ExpoMediapipeTextTasks.PI}</Text>
-        </Group>
-        <Group name="Functions">
-          <Text>{ExpoMediapipeTextTasks.hello()}</Text>
-        </Group>
-        <Group name="Async functions">
-          <Button
-            title="Set value"
-            onPress={async () => {
-              await ExpoMediapipeTextTasks.setValueAsync('Hello from JS!');
-            }}
-          />
-        </Group>
-        <Group name="Events">
-          <Text>{onChangePayload?.value}</Text>
-        </Group>
-        <Group name="Views">
-          <ExpoMediapipeTextTasksView
-            url="https://www.example.com"
-            onLoad={({ nativeEvent: { url } }) => console.log(`Loaded: ${url}`)}
-            style={styles.view}
-          />
-        </Group>
+    <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+      <ScrollView>
+        <Text>Embeddings: {embeddings}</Text>
       </ScrollView>
-    </SafeAreaView>
-  );
-}
-
-function Group(props: { name: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.group}>
-      <Text style={styles.groupHeader}>{props.name}</Text>
-      {props.children}
+      <TextInput
+        value={text}
+        onChangeText={setText}
+        placeholder="Enter text to embed"
+        style={{ width: 200, height: 40, borderColor: "gray", borderWidth: 1 }}
+      />
     </View>
   );
 }
-
-const styles = {
-  header: {
-    fontSize: 30,
-    margin: 20,
-  },
-  groupHeader: {
-    fontSize: 20,
-    marginBottom: 20,
-  },
-  group: {
-    margin: 20,
-    backgroundColor: '#fff',
-    borderRadius: 10,
-    padding: 20,
-  },
-  container: {
-    flex: 1,
-    backgroundColor: '#eee',
-  },
-  view: {
-    flex: 1,
-    height: 200,
-  },
-};

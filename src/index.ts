@@ -1,5 +1,8 @@
-// Reexport the native module. On web, it will be resolved to ExpoMediapipeTextTasksModule.web.ts
-// and on native platforms to ExpoMediapipeTextTasksModule.ts
-export { default } from './ExpoMediapipeTextTasksModule';
-export { default as ExpoMediapipeTextTasksView } from './ExpoMediapipeTextTasksView';
-export * from  './ExpoMediapipeTextTasks.types';
+import ExpoMediapipeTextTasksModule from "./ExpoMediapipeTextTasksModule";
+
+export function embed(delegate: number, modelFile: string, text: string) {
+  return ExpoMediapipeTextTasksModule.embed(delegate, modelFile, text);
+}
+
+export const DELEGATE_CPU = ExpoMediapipeTextTasksModule.DELEGATE_CPU;
+export const DELEGATE_GPU = ExpoMediapipeTextTasksModule.DELEGATE_GPU;

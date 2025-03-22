@@ -1,12 +1,20 @@
-import { NativeModule, requireNativeModule } from 'expo';
+import { NativeModule, requireNativeModule } from "expo";
 
-import { ExpoMediapipeTextTasksModuleEvents } from './ExpoMediapipeTextTasks.types';
-
-declare class ExpoMediapipeTextTasksModule extends NativeModule<ExpoMediapipeTextTasksModuleEvents> {
-  PI: number;
-  hello(): string;
-  setValueAsync(value: string): Promise<void>;
+declare class ExpoMediapipeTextTasksModule {
+  DELEGATE_CPU: number;
+  DELEGATE_GPU: number;
+  embed(
+    delegate: number,
+    modelPath: string,
+    text: string,
+  ): Promise<{
+    string: string;
+    embeddings: number[];
+    inferenceTime: number;
+  }>;
 }
 
 // This call loads the native module object from the JSI.
-export default requireNativeModule<ExpoMediapipeTextTasksModule>('ExpoMediapipeTextTasks');
+export default requireNativeModule<ExpoMediapipeTextTasksModule>(
+  "ExpoMediapipeTextTasks",
+);
